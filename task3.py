@@ -12,11 +12,10 @@ def main():
     file_content_doc2 = open("rural.txt").read()
     sent_tokenize_list1 = sent_tokenize(file_content_doc1, language='english')
     sent_tokenize_list2 = sent_tokenize(file_content_doc2, language='english')
-    stem_ana = StemmingAnalyzer()
-
+    
     if not os.path.exists("index_for_sample_files_task3"):
         os.mkdir("index_for_sample_files_task3")
-    schema = Schema(id=ID(stored=True, unique=True), stem_text=TEXT(stored=True, analyzer=StemmingAnalyzer()))
+    schema = Schema(id=ID(stored=True, unique=True), stem_text=TEXT(stored=True,analyzer=StemmingAnalyzer()))
     ix = create_in("index_for_sample_files_task3", schema)
     writer = ix.writer()
 
@@ -28,10 +27,9 @@ def main():
 
     scores = sorting.ScoreFacet()
     with ix.searcher() as searcher:
-        
         query_text = QueryParser("stem_text", ix.schema, termclass=query.Variations, group= qparser.OrGroup).parse(
             "astonish crowd")
-        results = searcher.search(query_text, limit=10, sortedby="stem_text")
+        results = searcher.search(query_text, limit=10, sortedby=scores)
         for i in range(10):
             print(results[i])
 
