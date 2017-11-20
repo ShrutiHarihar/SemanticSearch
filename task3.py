@@ -5,7 +5,9 @@ from whoosh.qparser import QueryParser
 from whoosh import qparser, query, sorting
 from nltk.tokenize import sent_tokenize
 from nltk.stem import WordNetLemmatizer
+from nltk import pos_tag
 import os
+import itertools
 
 def main():
     file_content_doc1 = open("science.txt").read()
@@ -15,7 +17,7 @@ def main():
 
     if not os.path.exists("index_for_sample_files_task3"):
         os.mkdir("index_for_sample_files_task3")
-    my_analyzer = RegexTokenizer()| StopFilter()| LowercaseFilter() | StemFilter()  | Lemmatizer()
+    my_analyzer = RegexTokenizer()| StopFilter()| LowercaseFilter() | StemFilter() | PosTagger()| Lemmatizer()
     schema = Schema(id=ID(stored=True, unique=True), stem_text=TEXT(stored= True, analyzer=my_analyzer))
     ix = create_in("index_for_sample_files_task3", schema)
     writer = ix.writer()
@@ -29,14 +31,16 @@ def main():
     scores = sorting.ScoreFacet()
 
     with ix.searcher() as searcher:
-        query_text = QueryParser("stem_text", ix.schema, termclass=query.Variations, group= qparser.OrGroup).parse(
-            "what is something pretty astonishing?")
-        results = searcher.search(query_text, sortedby= scores, limit = 10)
+        og = qparser.OrGroup.factory(0.9)
+        query_text = QueryParser("stem_text", schema = ix.schema, group= og).parse(
+            "who is controlling the threat of locusts?")
+        print(query_text)
+        results = searcher.search(query_text, sortedby= scores, limit = 10 )
         for hit in results:
             print(hit["stem_text"])
 
 
-
+#filter for lemmatizing the data
 class Lemmatizer(Filter):
     def __eq__(self, other):
         return (other
@@ -63,7 +67,34 @@ class Lemmatizer(Filter):
             else:
                 lemma = lm.lemmatize(text)
                 self.cache[t.text] = lemma
+                t.text = lemma
                 yield t
+
+#filter for Pos Tagging
+class PosTagger(Filter):
+    def __eq__(self, other):
+        return (other
+                and self.__class__ is other.__class__
+                and self.__dict__ == other.__dict__)
+
+    def __ne__(self, other):
+        return not self == other
+
+    def __init__(self):
+         self.cache = {}
+
+    def __call__(self, tokens):
+         assert hasattr(tokens, "__iter__")
+         words = []
+         tokens1, tokens2 = itertools.tee(tokens)
+         for t in tokens1:
+            words.append(t.text)
+         tags = pos_tag(words)
+         i=0
+         for t in tokens2:
+             t.text = tags[i][0] + " "+ tags[i][1]
+             i += 1
+             yield t
 
 
 if __name__ == "__main__":
