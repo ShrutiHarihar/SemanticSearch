@@ -31,7 +31,7 @@ def main():
     with ix.searcher() as searcher:
         query_text = QueryParser("stem_text", ix.schema, termclass=query.Variations, group= qparser.OrGroup).parse(
             "what is something pretty astonishing?")
-        results = searcher.search(query_text, sortedby= scores)
+        results = searcher.search(query_text, sortedby= scores, limit = 10)
         for hit in results:
             print(hit["stem_text"])
 
