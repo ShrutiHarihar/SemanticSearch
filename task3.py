@@ -1,13 +1,15 @@
-from whoosh.analysis import StemFilter, Filter, LowercaseFilter, StopFilter, RegexTokenizer
+from whoosh.analysis import StandardAnalyzer, StemmingAnalyzer, Filter, LowercaseFilter, StopFilter, RegexTokenizer, Tokenizer, Token
 from whoosh.fields import Schema, TEXT, ID
 from whoosh.index import create_in
-from whoosh.qparser import QueryParser
-from whoosh import qparser, query, sorting
+from whoosh.qparser import  MultifieldParser
+from whoosh import qparser
 from nltk.tokenize import sent_tokenize
 from nltk.stem import WordNetLemmatizer
+from whoosh.scoring import BM25F
 from nltk import pos_tag
-import os
+import os, spacy
 import itertools
+import whoosh
 
 def main():
     file_content_doc1 = open("science.txt").read()
@@ -15,30 +17,29 @@ def main():
     sent_tokenize_list1 = sent_tokenize(file_content_doc1, language='english')
     sent_tokenize_list2 = sent_tokenize(file_content_doc2, language='english')
 
-    if not os.path.exists("index_for_sample_files_task3"):
-        os.mkdir("index_for_sample_files_task3")
-    my_analyzer = RegexTokenizer()| StopFilter()| LowercaseFilter() | StemFilter() | PosTagger()| Lemmatizer()
-    schema = Schema(id=ID(stored=True, unique=True), stem_text=TEXT(stored= True, analyzer=my_analyzer))
-    ix = create_in("index_for_sample_files_task3", schema)
+    if not os.path.exists("index_for_sample_files_task3_min"):
+        os.mkdir("index_for_sample_files_task3_min")
+
+    my_analyzer = RegexTokenizer()| StopFilter()| LowercaseFilter() | Lemmatizer()
+    pos_tagger = RegexTokenizer()| StopFilter()| LowercaseFilter()| PosTagger()
+    schema = Schema(id=ID(stored=True, unique=True),standard = TEXT(stored= True, analyzer= StandardAnalyzer()),  stem_text=TEXT( analyzer= StemmingAnalyzer()), lemma = TEXT( analyzer=my_analyzer), pos_text=TEXT( analyzer=pos_tagger), headword=TEXT(analyzer=DependencyParser()))
+    ix = create_in("index_for_sample_files_task3_min", schema)
     writer = ix.writer()
 
     for sentence in sent_tokenize_list1:
-        writer.add_document(stem_text = sentence)
+        writer.add_document(standard = sentence,stem_text = sentence, lemma = sentence, pos_text= sentence, headword = sentence)
     for sentence in sent_tokenize_list2:
-        writer.add_document(stem_text = sentence)
+        writer.add_document(standard = sentence,stem_text = sentence, lemma = sentence, pos_text= sentence, headword = sentence)
     writer.commit()
-
-    scores = sorting.ScoreFacet()
-
-    with ix.searcher() as searcher:
-        og = qparser.OrGroup.factory(0.9)
-        query_text = QueryParser("stem_text", schema = ix.schema, group= og).parse(
-            "who is controlling the threat of locusts?")
-        print(query_text)
-        results = searcher.search(query_text, sortedby= scores, limit = 10 )
-        for hit in results:
-            print(hit["stem_text"])
-
+    with ix.searcher(weighting=whoosh.scoring.BM25F()) as searcher:
+        og = qparser.OrGroup.factory(0.5)
+        query_text = MultifieldParser(["headword","standard","stem_text","lemma","pos_text"], schema = ix.schema, group = og).parse(
+            "what will reduce cystic fibrosis?")
+        #print(query_text)
+        results = searcher.search(query_text, limit = 10)
+        for i, hit in enumerate(results):
+            print(results.score(i), hit["standard"], sep=":" )
+            print("\n")
 
 #filter for lemmatizing the data
 class Lemmatizer(Filter):
@@ -95,6 +96,22 @@ class PosTagger(Filter):
              t.text = tags[i][0] + " "+ tags[i][1]
              i += 1
              yield t
+
+class DependencyParser(Tokenizer):
+    def __eq__(self, other):
+        return other and self.__class__ is other.__class__
+
+    def __call__(self, value, positions=False, chars=False, keeporiginal=False,
+                     removestops=True, start_pos=0, start_char=0, tokenize=True,
+                     mode='', **kwargs):
+        t = Token(positions, chars, removestops=removestops, mode=mode,
+                      **kwargs)
+        nlp = spacy.load('en_core_web_sm')
+        doc = nlp(value)
+        t.pos = start_pos
+        for chunk in doc.noun_chunks:
+            t.text = chunk.root.dep_
+            yield t
 
 
 if __name__ == "__main__":
