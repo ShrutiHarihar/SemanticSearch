@@ -17,8 +17,8 @@ import spacy
 
 
 def main():
-    file_content_doc1 = open("rural_min.txt").read()
-    file_content_doc2 = open("science_min.txt").read()
+    file_content_doc1 = open("rural.txt").read()
+    file_content_doc2 = open("science.txt").read()
     option = True;
     while option:
         print("""
@@ -31,8 +31,8 @@ def main():
 
             sent_tokenize_list1 = sent_tokenize(file_content_doc1, language='english')
             sent_tokenize_list2 = sent_tokenize(file_content_doc2, language='english')
-            if not os.path.exists("index_task3_min"):
-                os.mkdir("index_task3_min")
+            if not os.path.exists("index_task4_min"):
+                os.mkdir("index_task4_min")
 
             my_analyzer = RegexTokenizer() | StopFilter() | LowercaseFilter() | Lemmatizer()
             pos_tagger = RegexTokenizer() | StopFilter() | LowercaseFilter() | PosTagger()
@@ -46,32 +46,31 @@ def main():
                             stem_text = TEXT(stored=True, analyzer=StemmingAnalyzer()), lemma = TEXT(stored=True, analyzer=my_analyzer),
                             pos_text = TEXT(stored=True, analyzer=pos_tagger), hypernym = TEXT(stored=True, analyzer=wordnetsyn1),
                             hyponym = TEXT(stored=True, analyzer=wordnetsyn2), holonym = TEXT(stored=True, analyzer=wordnetsyn3),
-                            meronyms = TEXT(stored=True, analyzer=wordnetsyn4),
-                            dependency = TEXT(analyzer=DependencyParser()))
+                            meronyms = TEXT(stored=True, analyzer=wordnetsyn4))
 
-            ix = index.create_in("index_task3_min", schema)
+            ix = index.create_in("index_task4_min", schema)
             writer = ix.writer()
 
             for sentence in sent_tokenize_list1:
-                 writer.add_document(standard=sentence, stem_text=sentence, lemma=sentence, pos_text=sentence, hypernym=sentence,
-                                hyponym=sentence, meronyms=sentence, holonym=sentence, dependency = sentence)
+                writer.add_document(standard=sentence, stem_text=sentence, lemma=sentence, pos_text=sentence, hypernym=sentence,
+                                hyponym=sentence, meronyms=sentence, holonym=sentence)
             for sentence in sent_tokenize_list2:
                 writer.add_document(standard=sentence, stem_text=sentence, lemma=sentence, pos_text=sentence,
                                     hypernym=sentence,
-                                    hyponym=sentence, meronyms=sentence, holonym=sentence, dependency=sentence)
+                                    hyponym=sentence, meronyms=sentence, holonym=sentence)
             writer.commit()
 
-            print_index_details(ix)
+
 
             print("\n\n Index created with various features as its fields")
 
         elif option=="2":
-            ix = index.open_dir("index_task3")
+            ix = index.open_dir("index_task4")
 
             with ix.searcher(weighting=whoosh.scoring.BM25F()) as searcher:
                 og = qparser.OrGroup.factory(0.5)
                 q = input("\n Insert a query...!")
-                query_text = MultifieldParser(["standard", "stem_text", "lemma", "pos_text","hyponym","meronyms", "hypernym","holonym"], schema=ix.schema, group=og).parse(q)
+                query_text = MultifieldParser(["standard", "stem_text", "lemma", "pos_text"],schema=ix.schema, group=og).parse(q)
                 results = searcher.search(query_text, limit=10)
                 for i, hit in enumerate(results):
                     print(results.score(i), hit["standard"], sep=":")
@@ -84,64 +83,6 @@ def main():
         else:
             print("\n Not valid choice try again...!")
 
-def print_index_details(ix):
-    docs = ix.searcher().reader()
-    stem, lemma = itertools.tee(docs)
-    standard, hypernyms = itertools.tee(docs)
-    holonyms, meronyms = itertools.tee(docs)
-    headwords, postext = itertools.tee(docs)
-
-    print('Stemming index')
-    for doc in stem:
-        if doc[0][0] == 'stem_text':
-            print(doc)
-    print("----------------------------------------------------------------------------------------------------------------------")
-
-    print('\nLemmatizing index')
-    for doc in lemma:
-        if doc[0][0] == 'lemma':
-            print(doc)
-    print(
-        "----------------------------------------------------------------------------------------------------------------------")
-
-    print('\nPos tagging Index')
-    for doc in postext:
-        if doc[0][0] == 'pos_text':
-            print(doc)
-    print(
-        "----------------------------------------------------------------------------------------------------------------------")
-
-    print('\nDependency parse relations')
-    for doc in headwords:
-        if doc[0][0] == 'dependency':
-            print(doc)
-
-    print("----------------------------------------------------------------------------------------------------------------------")
-    print('\nHypernym index')
-    for doc in hypernyms:
-        if doc[0][0] == 'hypernym':
-            print(doc)
-
-    print("----------------------------------------------------------------------------------------------------------------------")
-
-    print('\nHyponym index')
-    for doc in docs:
-        if doc[0][0] == 'hyponym':
-            print(doc)
-
-    print(
-        "----------------------------------------------------------------------------------------------------------------------")
-    print('\nHolonym index')
-    for doc in holonyms:
-        if doc[0][0] == 'holonym':
-            print(doc)
-
-    print(
-        "----------------------------------------------------------------------------------------------------------------------")
-    print('\nMeronym index')
-    for doc in meronyms:
-        if doc[0][0] == 'meronyms':
-            print(doc)
 
 
 # filter for lemmatizing the data
@@ -222,7 +163,11 @@ class WordNetSynsets(Filter):
                 continue
             text = t.text
             for ss in wn.synsets(text):
-                t.text = ', '.join([str(x) for x in ss.hypernyms()])
+                hypernyms = ss.hypernyms()
+                parsed_hypernyms = []
+                for sss in hypernyms:
+                    parsed_hypernyms.append(str(sss)[8:-2])
+                t.text = ', '.join([str(x) for x in parsed_hypernyms])
                 yield t
 
 
@@ -246,8 +191,13 @@ class WordNetSynsets1(Filter):
                 continue
             text = t.text
             for ss in wn.synsets(text):
-                t.text = ', '.join([str(x) for x in ss.hyponyms()])
+                hyponyms = ss.hyponyms()
+                parsed_hyponyms = []
+                for sss in hyponyms:
+                    parsed_hyponyms.append(str(sss)[8:-2])
+                t.text = ', '.join([str(x) for x in parsed_hyponyms])
                 yield t
+
 
 
 class WordNetSynsets2(Filter):
@@ -270,7 +220,11 @@ class WordNetSynsets2(Filter):
                 continue
             text = t.text
             for ss in wn.synsets(text):
-                t.text = ', '.join([str(x) for x in ss.member_holonyms()])
+                holonyms = ss.member_holonyms()
+                parsed_holonyms = []
+                for sss in holonyms:
+                    parsed_holonyms.append(str(sss)[8:-2])
+                t.text = ', '.join([str(x) for x in parsed_holonyms])
                 yield t
 
 
@@ -294,27 +248,12 @@ class WordNetSynsets3(Filter):
                 continue
             text = t.text
             for ss in wn.synsets(text):
-                t.text = ', '.join([str(x) for x in ss.part_meronyms()])
+                meronyms = ss.part_meronyms()
+                parsed_meronyms = []
+                for sss in meronyms:
+                    parsed_meronyms.append(str(sss)[8:-2])
+                t.text = ', '.join([str(x) for x in parsed_meronyms])
                 yield t
-
-
-class DependencyParser(Tokenizer):
-    def __eq__(self, other):
-        return other and self.__class__ is other.__class__
-
-    def __call__(self, value, positions=False, chars=False, keeporiginal=False,
-                     removestops=True, start_pos=0, start_char=0, tokenize=True,
-                     mode='', **kwargs):
-        t = Token(positions, chars, removestops=removestops, mode=mode,
-                      **kwargs)
-        nlp = spacy.load('en_core_web_sm')
-        doc = nlp(value)
-
-        t.pos = start_pos
-
-        for chunk in doc:
-            t.text = chunk.dep_
-            yield t
 
 if __name__ == "__main__":
     main()
